@@ -1,0 +1,12 @@
+node_modules/
+dist/
+release/
+python_dist/
+build/
+__pycache__/
+*.pkl
+*.onnx
+.DS_Store
+.env
+data/model/
+data/synthetic_aml_alerts.csv
