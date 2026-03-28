@@ -1,114 +1,57 @@
-"""
-ClearAlert Python Sidecar — Main Entry Point
-Reads JSON commands from stdin, processes files, writes JSON responses to stdout.
-All processing is 100% offline.
-"""
-import sys
-import json
-import traceback
-
-if hasattr(sys.stdin, 'reconfigure'):
-    sys.stdin.reconfigure(encoding='utf-8')
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
-
+import io
+import os
+import uvicorn
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from inference import process_alerts_file
+import tempfile
 
+app = FastAPI(title="ClearAlert ML Engine")
 
-def send_response(data):
-    """Send a JSON response to stdout (Electron reads this)."""
-    sys.stdout.write(json.dumps(data) + '\n')
-    sys.stdout.flush()
+# Configure CORS for Web Access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "ClearAlert ML Engine is running."}
 
-def handle_request(request):
-    """Route incoming requests to the appropriate handler."""
-    action = request.get('action')
-    request_id = request.get('request_id', '')
+@app.post("/api/analyze")
+async def analyze_file(file: UploadFile = File(...)):
+    """
+    Accepts a CSV/Excel file, runs the anomaly detection pipeline,
+    and returns the structured results.
+    """
+    extension = file.filename.split(".")[-1].lower()
+    if extension not in ["csv", "xlsx", "xls"]:
+        raise HTTPException(status_code=400, detail="Invalid file format. Please upload CSV or Excel.")
 
-    if action == 'process_file':
-        filepath = request.get('filepath', '')
-        try:
-            # Progress: Parsing file
-            send_response({
-                'request_id': request_id,
-                'status': 'progress',
-                'percent': 10,
-                'message': 'Parsing file...'
-            })
+    # Create a temporary file to save the upload
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{extension}") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
 
-            # Progress: Loading model
-            send_response({
-                'request_id': request_id,
-                'status': 'progress',
-                'percent': 30,
-                'message': 'Loading ML model...'
-            })
+    try:
+        # Pass the temporary path to our existing inference engine
+        results = process_alerts_file(tmp_path)
+        return results
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up temporary file
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
-            # Run the full pipeline
-            results = process_alerts_file(
-                filepath,
-                progress_callback=lambda pct, msg: send_response({
-                    'request_id': request_id,
-                    'status': 'progress',
-                    'percent': pct,
-                    'message': msg,
-                })
-            )
-
-            # Send completed results
-            send_response({
-                'request_id': request_id,
-                'status': 'complete',
-                'data': results,
-            })
-
-        except Exception as e:
-            send_response({
-                'request_id': request_id,
-                'status': 'error',
-                'message': f'Processing error: {str(e)}',
-            })
-            traceback.print_exc(file=sys.stderr)
-
-    elif action == 'ping':
-        send_response({
-            'request_id': request_id,
-            'status': 'pong',
-        })
-
-    else:
-        send_response({
-            'request_id': request_id,
-            'status': 'error',
-            'message': f'Unknown action: {action}',
-        })
-
-
-def main():
-    """Main loop: read JSON lines from stdin."""
-    # Signal readiness
-    send_response({'status': 'ready', 'message': 'ClearAlert ML engine ready'})
-
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            request = json.loads(line)
-            handle_request(request)
-        except json.JSONDecodeError:
-            send_response({
-                'status': 'error',
-                'message': 'Invalid JSON received',
-            })
-        except Exception as e:
-            send_response({
-                'status': 'error',
-                'message': f'Unexpected error: {str(e)}',
-            })
-            traceback.print_exc(file=sys.stderr)
-
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    import sys
+    # Add the current directory to sys.path so uvicorn can find 'main'
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

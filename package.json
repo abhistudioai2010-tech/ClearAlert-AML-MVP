@@ -2,12 +2,10 @@
   "name": "clearalert",
   "version": "1.0.0",
   "description": "Offline-first AML false positive reduction tool",
-  "main": "electron/main.js",
   "private": true,
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "dev": "concurrently \"vite\" \"py python/main.py\"",
     "build": "vite build",
-    "electron:build": "vite build && electron-builder --win",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -18,40 +16,8 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
     "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
-    "electron": "^41.0.3",
-    "electron-builder": "^26.8.1",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
-    "vite": "^8.0.2",
-    "wait-on": "^7.2.0"
-  },
-  "build": {
-    "appId": "com.clearalert.app",
-    "productName": "ClearAlert",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "python_dist/",
-        "to": "python_backend",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
-    "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "assets/icon.icns"
-    }
+    "vite": "^7.0.0"
   }
 }

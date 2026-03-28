@@ -13,48 +13,33 @@ export default function App() {
   const [error, setError] = useState(null);
   const [fileName, setFileName] = useState('');
 
-  // Listen for Python sidecar responses
-  useEffect(() => {
-    if (!window.clearalert) return;
-
-    const unsubResponse = window.clearalert.onPythonResponse((data) => {
-      if (data.status === 'progress') {
-        setProgress({ percent: data.percent, message: data.message });
-      } else if (data.status === 'complete') {
-        setResults(data.data);
-        setView(VIEWS.RESULTS);
-      } else if (data.status === 'error') {
-        setError(data.message || 'An error occurred during processing.');
-        setView(VIEWS.UPLOAD);
-      }
-    });
-
-    const unsubError = window.clearalert.onPythonError((data) => {
-      setError(data.message);
-      setView(VIEWS.UPLOAD);
-    });
-
-    return () => {
-      unsubResponse();
-      unsubError();
-    };
-  }, []);
-
-  const handleFileSelected = useCallback(async (filePath, name) => {
+  // Removed Electron IPC listeners
+  const handleFileSelected = useCallback(async (file, name) => {
     setError(null);
     setFileName(name);
-    setProgress({ percent: 0, message: 'Initializing ML engine...' });
+    setProgress({ percent: 10, message: 'Uploading file to ML engine...' });
     setView(VIEWS.PROCESSING);
 
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-      if (window.clearalert) {
-        await window.clearalert.processFile(filePath);
-      } else {
-        // Demo mode for browser development
-        simulateDemoProcessing();
+      // Relative path works because of the Vite proxy in vite.config.js
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to process file');
       }
+
+      const data = await response.json();
+      setResults(data);
+      setView(VIEWS.RESULTS);
     } catch (err) {
-      setError('Failed to start processing: ' + err.message);
+      setError('Processing Error: ' + err.message);
       setView(VIEWS.UPLOAD);
     }
   }, []);

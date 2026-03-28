@@ -31,9 +31,8 @@ export default function FileUploader({ onFileSelected }) {
       alert('Please upload a CSV or Excel file.');
       return;
     }
-    // Pass the file path; in Electron, File objects include a path property
-    const filePath = file.path || file.name;
-    onFileSelected(filePath, file.name);
+    // In web, we pass the File object itself
+    onFileSelected(file, file.name);
   }, [onFileSelected]);
 
   const handleDrop = useCallback((e) => {
@@ -48,17 +47,9 @@ export default function FileUploader({ onFileSelected }) {
     }
   }, [processFile]);
 
-  const handleClick = useCallback(async () => {
-    if (window.clearalert) {
-      const filePath = await window.clearalert.selectFile();
-      if (filePath) {
-        const name = filePath.split(/[\\/]/).pop();
-        onFileSelected(filePath, name);
-      }
-    } else {
-      fileInputRef.current?.click();
-    }
-  }, [onFileSelected]);
+  const handleClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
 
   const handleFileInput = useCallback((e) => {
     const file = e.target.files?.[0];
@@ -74,8 +65,8 @@ export default function FileUploader({ onFileSelected }) {
           Analyze Your <span className="gradient-text">AML Alerts</span>
         </h2>
         <p className="text-slate-400 text-sm max-w-md mx-auto">
-          Upload your daily transaction alerts file. Our local ML engine will identify
-          false positives and generate audit-ready justification logs — all offline.
+          Upload your daily transaction alerts file. Our cloud-based ML engine will identify
+          false positives and generate audit-ready justification logs.
         </p>
       </div>
 
@@ -151,7 +142,7 @@ export default function FileUploader({ onFileSelected }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
         </svg>
         <span className="text-xs text-slate-500">
-          All data stays on your machine. Zero network requests.
+          Secure cloud-native processing. Advanced data encryption in transit.
         </span>
       </div>
     </div>
