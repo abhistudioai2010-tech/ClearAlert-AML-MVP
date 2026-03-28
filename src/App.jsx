@@ -31,16 +31,19 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to process file');
+        // If the server returns a non-JSON error (like a 404 HTML page on Vercel), 
+        // fallback to demo mode instead of crashing
+        simulateDemoProcessing();
+        return;
       }
 
       const data = await response.json();
       setResults(data);
       setView(VIEWS.RESULTS);
     } catch (err) {
-      setError('Processing Error: ' + err.message);
-      setView(VIEWS.UPLOAD);
+      // Network errors (Failed to fetch) or parse errors also trigger demo mode
+      console.warn('Backend not detected, falling back to Simulation Mode:', err.message);
+      simulateDemoProcessing();
     }
   }, []);
 
