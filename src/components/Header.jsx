@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Header({ onReset, showReset }) {
+export default function Header({ onReset, showReset, isAiOnline }) {
   return (
     <header className="relative z-20 drag-region">
       <div className="flex items-center justify-between px-6 py-4">
@@ -33,8 +33,10 @@ export default function Header({ onReset, showReset }) {
             </button>
           )}
           <div className="flex items-center gap-1.5 px-3 py-1.5 glass rounded-lg">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-slow" />
-            <span className="text-[11px] text-slate-400">Offline · Secure</span>
+            <span className={`w-2 h-2 rounded-full ${isAiOnline ? 'bg-emerald-400 animate-pulse-slow' : 'bg-red-400'}`} />
+            <span className="text-[11px] text-slate-400">
+              {isAiOnline ? 'AI Engine Online' : 'AI Engine Offline'}
+            </span>
           </div>
         </div>
       </div>

@@ -12,6 +12,23 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [fileName, setFileName] = useState('');
+  const [isBackendOnline, setIsBackendOnline] = useState(false);
+
+  // Check backend health periodically
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const res = await fetch('/api/');
+        if (res.ok) setIsBackendOnline(true);
+        else setIsBackendOnline(false);
+      } catch {
+        setIsBackendOnline(false);
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Removed Electron IPC listeners
   const handleFileSelected = useCallback(async (file, name) => {
@@ -31,19 +48,25 @@ export default function App() {
       });
 
       if (!response.ok) {
-        // If the server returns a non-JSON error (like a 404 HTML page on Vercel), 
-        // fallback to demo mode instead of crashing
-        simulateDemoProcessing();
-        return;
+        // If it's a Vercel-specific 404/error, we can fallback, but else show the error
+        if (window.location.hostname.includes('vercel')) {
+          simulateDemoProcessing();
+          return;
+        }
+        const errorData = await response.json().catch(() => ({ detail: 'Backend returned an invalid response (HTML).' }));
+        throw new Error(errorData.detail || 'Failed to process file');
       }
-
+      
       const data = await response.json();
       setResults(data);
       setView(VIEWS.RESULTS);
     } catch (err) {
-      // Network errors (Failed to fetch) or parse errors also trigger demo mode
-      console.warn('Backend not detected, falling back to Simulation Mode:', err.message);
-      simulateDemoProcessing();
+      if (window.location.hostname.includes('vercel')) {
+        simulateDemoProcessing();
+      } else {
+        setError('Connection Error: The AI engine (Python) is not responding. Please run `py python/main.py` in your terminal.');
+        setView(VIEWS.UPLOAD);
+      }
     }
   }, []);
 
@@ -83,7 +106,11 @@ export default function App() {
         <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-accent-violet/5 rounded-full blur-3xl" />
       </div>
 
-      <Header onReset={handleReset} showReset={view !== VIEWS.UPLOAD} />
+      <Header 
+        onReset={handleReset} 
+        showReset={view !== VIEWS.UPLOAD} 
+        isAiOnline={isBackendOnline} 
+      />
 
       <main className="relative z-10 flex-1 flex items-center justify-center p-6">
         {error && (

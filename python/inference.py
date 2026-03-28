@@ -62,6 +62,40 @@ def identify_columns(columns):
         
     return mapping
 
+def calculate_logic_score(df, cmap):
+    """
+    Calculate a 'Rule-Based' risk score (0.0 to 1.0) using AML heuristics.
+    Heuristics: Structuring, High-Risk Jurisdictions, and Velocity.
+    """
+    scores = np.zeros(len(df))
+    
+    amount_col = cmap['amount_col']
+    country_col = cmap['country_col']
+    cust_col = cmap['customer_col']
+
+    # 1. Structuring Detector (Transactions close to $10k threshold)
+    if amount_col and pd.api.types.is_numeric_dtype(df[amount_col]):
+        # $9,000 to $10,000 is a classic structuring range
+        structuring_mask = (df[amount_col] >= 9000) & (df[amount_col] < 10000)
+        scores[structuring_mask] += 0.4
+
+    # 2. High-Risk Jurisdiction Multiplier
+    if country_col:
+        high_risk_list = ['panama', 'cayman', 'bahamas', 'belize', 'seychelles', 'bermuda']
+        countries = df[country_col].astype(str).str.lower()
+        for hr in high_risk_list:
+            scores[countries.str.contains(hr, na=False)] += 0.35
+
+    # 3. Transaction Velocity (Frequency of entity in current batch)
+    if cust_col:
+        counts = df[cust_col].value_counts()
+        # More than 3 alerts for the same entity in a batch is suspicious
+        high_freq_entities = counts[counts > 3].index
+        scores[df[cust_col].isin(high_freq_entities)] += 0.25
+
+    # Clip scores to [0, 1]
+    return np.clip(scores, 0, 1)
+
 def process_alerts_file(filepath, progress_callback=None):
     """
     Full pipeline: 
@@ -137,17 +171,25 @@ def process_alerts_file(filepath, progress_callback=None):
     if progress_callback:
         progress_callback(85, 'Classifying and compiling justification logs...')
 
-    # Normalize scores (anomaly -> high risk -> close to 1.0)
+    # 1. Calculate Logic-Based Score (Heuristics)
+    logic_scores = calculate_logic_score(df, cmap)
+
+    # 2. Normalize ML Scores (anomaly -> high risk -> close to 1.0)
     min_s, max_s = scores.min(), scores.max()
     if max_s > min_s:
-        # Lower anomaly score = higher risk. 
+        # Lower anomaly score = higher statistical risk. 
         # Map worst score (min) to 1.0, best score (max) to 0.0
-        normalized = (scores - min_s) / (max_s - min_s)
-        risk_scores = 1.0 - normalized
+        ml_scores = 1.0 - (scores - min_s) / (max_s - min_s)
     else:
-        risk_scores = np.array([0.5] * len(df))
+        ml_scores = np.array([0.5] * len(df))
 
+    # 3. Combine scores (Weighted Hybrid: 60% Logic, 40% ML)
+    # This makes the results feel more "logical" to human users
+    risk_scores = (logic_scores * 0.6) + (ml_scores * 0.4)
+    
     df['risk_score'] = risk_scores
+    df['ml_score'] = ml_scores
+    df['logic_score'] = logic_scores
 
     # Top 5% risk = critical
     threshold = np.percentile(risk_scores, 95)
